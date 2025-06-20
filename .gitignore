@@ -1,4 +1,6 @@
 .DS_Store
 .venv
-/assets/*
+/assets/bronze/*.csv
+/assets/gold/*.csv
+/assets/silver/*.csv
 .vscode
