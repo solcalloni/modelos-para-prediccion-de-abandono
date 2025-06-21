@@ -5,3 +5,4 @@
 /assets/silver/*
 .vscode
 packages/exploratory-data-analysis/__pycache__
+secrets/credential.txt
