@@ -1,6 +1,7 @@
 .DS_Store
 .venv
-/assets/bronze/*.csv
-/assets/gold/*.csv
-/assets/silver/*.csv
+/assets/bronze/*
+/assets/gold/*
+/assets/silver/*
 .vscode
+packages/exploratory-data-analysis/__pycache__
