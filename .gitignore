@@ -3,6 +3,7 @@
 /assets/bronze/*
 /assets/gold/*
 /assets/silver/*
+/assets/resultados_modelos/*
 .vscode
 packages/exploratory-data-analysis/__pycache__
 secrets/credential.txt
