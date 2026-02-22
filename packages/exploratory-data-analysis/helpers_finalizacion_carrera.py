@@ -67,7 +67,7 @@ def get_porcentaje_aprobadas(
     # --- Materias ---
     with open(path_yaml, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-    materias = [_normalizar(m) for m in config["materias"]]
+        materias = [_normalizar(m) for plan in config["planes"] for m in plan["materias"]]
 
     # --- Personas ---
     personas = pd.read_csv(
