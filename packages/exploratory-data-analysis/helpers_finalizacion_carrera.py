@@ -34,6 +34,7 @@ def get_porcentaje_aprobadas(
     path_yaml: str,
     path_personas: Optional[str] = None,
     path_actas: Optional[str] = None,
+    todos_los_planes: bool = True,
 ) -> pd.DataFrame:
     """Calcula el porcentaje de materias aprobadas por estudiante para el año dado.
 
@@ -54,6 +55,8 @@ def get_porcentaje_aprobadas(
         Ruta a reporte_personas_desde_2005.csv. Si es None usa el default de FCEN.
     path_actas : str | None
         Ruta a reporte_actas_desde_2005.csv. Si es None usa el default de FCEN.
+    todos_los_planes : bool
+        Si True, usa todos los planes del YAML. Si False, usa solo el primero (default: True).
 
     Retorna
     -------
@@ -67,7 +70,8 @@ def get_porcentaje_aprobadas(
     # --- Materias ---
     with open(path_yaml, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-        materias = [_normalizar(m) for plan in config["planes"] for m in plan["materias"]]
+        planes = config["planes"] if todos_los_planes else config["planes"][:1]
+        materias = [_normalizar(m) for plan in planes for m in plan["materias"]]
 
     # --- Personas ---
     personas = pd.read_csv(
@@ -171,6 +175,7 @@ def get_materias_fuera_de_carrera(
     path_yaml: str,
     path_actas: Optional[str] = None,
     min_materias_aprobadas: int = 15,
+    todos_los_planes: bool = True,
 ) -> pd.DataFrame:
     """Retorna registros de actas con materias fuera del listado de la carrera para estudiantes con muchas aprobadas.
 
@@ -189,6 +194,8 @@ def get_materias_fuera_de_carrera(
         Ruta a reporte_actas_desde_2005.csv. Si es None usa el default de FCEN.
     min_materias_aprobadas : int
         Umbral mínimo de materias aprobadas para considerar un estudiante (default: 15).
+    todos_los_planes : bool
+        Si True, usa todos los planes del YAML. Si False, usa solo el primero (default: True).
 
     Retorna
     -------
@@ -207,7 +214,8 @@ def get_materias_fuera_de_carrera(
     # Materias de la carrera (normalizadas)
     with open(path_yaml, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-        materias = {_normalizar(m) for plan in config["planes"] for m in plan["materias"]}
+        planes = config["planes"] if todos_los_planes else config["planes"][:1]
+        materias = {_normalizar(m) for plan in planes for m in plan["materias"]}
 
     # Actas filtradas
     actas = pd.read_csv(path_actas, encoding="latin-1", dtype={"dni": str})
@@ -284,6 +292,7 @@ def get_egresados(
     path_actas: Optional[str] = None,
     min_materias_obligatorias: int = 15,
     min_materias_optativas: int = 3,
+    todos_los_planes: bool = True,
 ) -> pd.DataFrame:
     """Identifica estudiantes que terminaron la carrera según dos criterios.
 
@@ -308,6 +317,8 @@ def get_egresados(
         Mínimo de materias del plan aprobadas para condición 2 (default: 15).
     min_materias_optativas : int
         Mínimo de materias fuera del plan aprobadas para condición 2 (default: 3).
+    todos_los_planes : bool
+        Si True, usa todos los planes del YAML. Si False, usa solo el primero (default: True).
 
     Retorna
     -------
@@ -321,7 +332,8 @@ def get_egresados(
     # --- Materias del plan (normalizadas) ---
     with open(path_yaml, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-        materias = {_normalizar(m) for plan in config["planes"] for m in plan["materias"]}
+        planes = config["planes"] if todos_los_planes else config["planes"][:1]
+        materias = {_normalizar(m) for plan in planes for m in plan["materias"]}
 
     # --- Personas ---
     personas = pd.read_csv(
