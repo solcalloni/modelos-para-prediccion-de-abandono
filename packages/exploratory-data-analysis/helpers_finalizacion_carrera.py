@@ -484,3 +484,221 @@ def get_anio_mayor_proporcion(df: pd.DataFrame) -> pd.Series:
 
     return resumen["proporcion"].idxmax(), resumen["proporcion"].max()
 
+
+# Materias troncales (obligatorias) de la Licenciatura en Biología, unión de ambos planes.
+# Materias troncales (obligatorias) de la Licenciatura en Ciencias Biológicas.
+# Lista unificada usada para ambos planes (1984 y 2019).
+_MATERIAS_OBLIGATORIAS_BIOLOGIA = [
+    "Biometría",
+    "Ecología General",
+    "Fisica II",
+    "Genética I",
+    "Introducción a la Biología Molecular y Celular",
+    "Introducción a la Botánica",
+    "Introducción a la Zoología",
+    "Análisis Matemático I",
+    "Elementos de Cálculo Numérico",
+    "Física I",
+    "Química Biológica",
+    "Química General e Inorgánica I",
+    "Química Orgánica",
+    "Electromagnetismo y Óptica",
+    "Evolución",
+    "Genética",
+    "Matemática I",
+    "Matemática II",
+    "Mecánica y Termodinámica",
+]
+
+
+def get_egresados_biologia(
+    carreras: List[str],
+    path_yaml: str,
+    path_personas: Optional[str] = None,
+    path_actas: Optional[str] = None,
+    min_obligatorias_1984: int = 13,
+    min_ciclo_superior_1984: int = 8,
+    min_obligatorias_2019: int = 14,
+    min_ciclo_superior_2019: int = 6,
+) -> pd.DataFrame:
+    """Identifica egresados de la Licenciatura en Biología con su año de egreso.
+
+    Condición 1: el DNI tiene "TESIS DE LICENCIATURA" aprobada.
+        → anio_egreso = año de aprobación de la tesis.
+
+    Condición 2: el DNI no tiene tesis. El plan se determina por "EVOLUCION":
+      - Plan 2019: aprobó "EVOLUCION" en 2019 o posterior.
+          Debe tener ≥min_obligatorias_2019 materias del plan 2019 Y
+          ≥min_ciclo_superior_2019 materias del ciclo superior del plan 2019.
+      - Plan 1984: no cumple la condición anterior.
+          Debe tener ≥min_obligatorias_1984 materias del plan 1984 Y
+          ≥min_ciclo_superior_1984 materias del ciclo superior del plan 1984.
+      → anio_egreso = año de la última materia aprobada entre las
+        obligatorias y ciclo superior consideradas.
+
+    Parámetros
+    ----------
+    carreras : list[str]
+        Valores a filtrar en la columna 'carrera_principal' de personas.
+    path_yaml : str
+        Ruta al archivo YAML con el listado de materias por plan.
+    path_personas : str | None
+        Ruta a reporte_personas_desde_2005.csv. Si es None usa el default de FCEN.
+    path_actas : str | None
+        Ruta a reporte_actas_desde_2005.csv. Si es None usa el default de FCEN.
+    min_obligatorias_1984 : int
+        Mínimo de materias troncales del plan 1984 (default: 13).
+    min_ciclo_superior_1984 : int
+        Mínimo de materias del ciclo superior del plan 1984 (default: 8).
+    min_obligatorias_2019 : int
+        Mínimo de materias troncales del plan 2019 (default: 14).
+    min_ciclo_superior_2019 : int
+        Mínimo de materias del ciclo superior del plan 2019 (default: 6).
+
+    Retorna
+    -------
+    pd.DataFrame
+        Columnas: dni, año_inscripcion_facultad, carrera_principal, anio_egreso.
+        Un registro por DNI que cumple condición 1 o condición 2.
+    """
+    path_personas = Path(path_personas) if path_personas else _DEFAULT_PERSONAS
+    path_actas = Path(path_actas) if path_actas else _DEFAULT_ACTAS
+
+    # --- Materias obligatorias compartidas (normalizadas) ---
+    obligatorias = {_normalizar(m) for m in _MATERIAS_OBLIGATORIAS_BIOLOGIA}
+    # le saco a la lista obligatorias_1984 a la materia "Evolucion" porque en el plan 1984 no es obligatoria, sino del ciclo superior
+    obligatorias_1984 = obligatorias - {_normalizar("Evolución")}
+    obligatorias_2019 = obligatorias
+
+    # --- Ciclo superior por plan: materias del YAML que no son obligatorias ---
+    with open(path_yaml, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        materias_plan_1984 = {_normalizar(m) for m in config["planes"][0]["materias"]}
+        materias_plan_2019 = {_normalizar(m) for m in config["planes"][1]["materias"]}
+
+    TESIS = _normalizar("TESIS DE LICENCIATURA")
+    EVOLUCION = _normalizar("Evolución")
+
+    cs_1984 = materias_plan_1984 - obligatorias_1984
+    cs_2019 = materias_plan_2019 - obligatorias_2019
+
+    # --- Personas ---
+    personas = pd.read_csv(
+        path_personas,
+        usecols=["dni", "carrera_principal", "año_inscripcion_facultad"],
+        dtype={"dni": str},
+    )
+    personas = personas[personas["carrera_principal"].isin(carreras)].copy()
+
+    # --- Actas: Acta de Examen + Aprobado para los DNIs relevantes ---
+    actas_raw = pd.read_csv(path_actas, encoding="latin-1", dtype={"dni": str})
+    actas_raw["materia"] = actas_raw["materia"].apply(lambda x: _normalizar(str(x)))
+    actas_raw["fecha"] = pd.to_datetime(actas_raw["fecha"], format="%Y-%m-%d", errors="coerce")
+
+    actas_raw = actas_raw[
+        actas_raw["dni"].isin(personas["dni"])
+        & (actas_raw["tipo_acta"] == "Acta de Examen")
+        & (actas_raw["resultado"] == "Aprobado")
+    ].copy()
+
+    # Deduplicar por (dni, materia): quedarse con el registro más reciente
+    actas_raw = actas_raw.sort_values("fecha").drop_duplicates(
+        subset=["dni", "materia"], keep="last"
+    )
+
+    # -----------------------------------------------------------------------
+    # Condición 1: tiene TESIS DE LICENCIATURA aprobada
+    # -----------------------------------------------------------------------
+    actas_tesis = actas_raw[actas_raw["materia"] == TESIS][["dni", "fecha"]].copy()
+    actas_tesis = actas_tesis.rename(columns={"fecha": "fecha_egreso"})
+    actas_tesis["anio_egreso"] = actas_tesis["fecha_egreso"].dt.year
+
+    dnis_con_tesis = set(actas_tesis["dni"].unique())
+
+    # -----------------------------------------------------------------------
+    # Condición 2: sin tesis — detectar plan y aplicar umbrales correspondientes
+    # -----------------------------------------------------------------------
+    actas_sin_tesis = actas_raw[~actas_raw["dni"].isin(dnis_con_tesis)].copy()
+
+    # DNIs del plan 2019: aprobaron EVOLUCION en 2019 o posterior
+    dnis_plan_2019 = set(
+        actas_sin_tesis.loc[
+            (actas_sin_tesis["materia"] == EVOLUCION)
+            & (actas_sin_tesis["fecha"].dt.year >= 2019),
+            "dni",
+        ].unique()
+    )
+    dnis_plan_1984 = set(actas_sin_tesis["dni"].unique()) - dnis_plan_2019
+
+    def _egresados_por_plan(dnis, obligatorias, ciclo_superior, min_oblig, min_cs):
+        """Devuelve DNIs que cumplen los umbrales y su año de egreso."""
+        actas = actas_sin_tesis[actas_sin_tesis["dni"].isin(dnis)]
+
+        conteo_oblig = actas[actas["materia"].isin(obligatorias)].groupby("dni")["materia"].count()
+        dnis_oblig_ok = set(conteo_oblig[conteo_oblig >= min_oblig].index)
+
+        conteo_cs = (
+            actas[actas["materia"].isin(ciclo_superior) & actas["dni"].isin(dnis_oblig_ok)]
+            .groupby("dni")["materia"]
+            .count()
+        )
+        dnis_cs_ok = set(conteo_cs[conteo_cs >= min_cs].index)
+
+        dnis_egresados = dnis_oblig_ok & dnis_cs_ok
+
+        actas_relevantes = actas[
+            actas["dni"].isin(dnis_egresados)
+            & (actas["materia"].isin(obligatorias) | actas["materia"].isin(ciclo_superior))
+        ]
+        return (
+            actas_relevantes.groupby("dni")["fecha"]
+            .max()
+            .dt.year
+            .reset_index()
+            .rename(columns={"fecha": "anio_egreso"})
+        )
+
+    egresados_1984 = _egresados_por_plan(
+        dnis_plan_1984, obligatorias_1984, cs_1984, min_obligatorias_1984, min_ciclo_superior_1984
+    )
+    egresados_2019 = _egresados_por_plan(
+        dnis_plan_2019, obligatorias_2019, cs_2019, min_obligatorias_2019, min_ciclo_superior_2019
+    )
+
+    # -----------------------------------------------------------------------
+    # Resultado final
+    # -----------------------------------------------------------------------
+    egresados = pd.concat(
+        [actas_tesis[["dni", "anio_egreso"]], egresados_1984, egresados_2019],
+        ignore_index=True,
+    )
+
+    resultado = egresados.merge(
+        personas[["dni", "año_inscripcion_facultad", "carrera_principal"]],
+        on="dni",
+        how="left",
+    )
+
+    return (
+        resultado[["dni", "año_inscripcion_facultad", "carrera_principal", "anio_egreso"]]
+        .drop_duplicates(subset=["dni"])
+        .reset_index(drop=True)
+    )
+
+
+def plot_egresados_biologia_por_anio(df: pd.DataFrame) -> None:
+    """Genera un par de barplots por cada año de egreso con la distribución de cohortes.
+
+    Delega en plot_egresados_por_anio para cada valor distinto de 'anio_egreso'
+    presente en el DataFrame, garantizando el mismo aspecto visual que el resto
+    de carreras.
+
+    Parámetros
+    ----------
+    df : pd.DataFrame
+        DataFrame devuelto por get_egresados_biologia, con columnas
+        'dni', 'año_inscripcion_facultad' y 'anio_egreso'.
+    """
+    for anio, grupo in df.groupby("anio_egreso"):
+        plot_egresados_por_anio(grupo, anio)
+
