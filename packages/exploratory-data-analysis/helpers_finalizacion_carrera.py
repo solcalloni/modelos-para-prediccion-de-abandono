@@ -702,3 +702,157 @@ def plot_egresados_biologia_por_anio(df: pd.DataFrame) -> None:
     for anio, grupo in df.groupby("anio_egreso"):
         plot_egresados_por_anio(grupo, anio)
 
+
+def get_egresados_fisica(
+    carreras: List[str],
+    path_yaml: str,
+    path_personas: Optional[str] = None,
+    path_actas: Optional[str] = None,
+    min_materias_sin_tesis: int = 22,
+    min_materias_fuera_de_plan: int = 2,
+) -> pd.DataFrame:
+    """Identifica egresados de la Licenciatura en Física con su año de egreso.
+
+    Condición 1: el DNI tiene "TESIS DE LICENCIATURA" aprobada.
+        → anio_egreso = año de aprobación de la tesis.
+
+    Condición 2: el DNI no tiene "TESIS DE LICENCIATURA" pero aprobó al menos
+    'min_materias_sin_tesis' de las 24 materias restantes del plan Y al menos
+    'min_materias_fuera_de_plan' materias fuera del temario de física.
+        → anio_egreso = año de la última materia aprobada del listado (sin tesis).
+
+    El umbral por defecto (22) equivale al 90% de las 24 materias sin tesis.
+
+    Parámetros
+    ----------
+    carreras : list[str]
+        Valores a filtrar en la columna 'carrera_principal' de personas.
+    path_yaml : str
+        Ruta al archivo YAML con el listado de materias (clave 'planes').
+    path_personas : str | None
+        Ruta a reporte_personas_desde_2005.csv. Si es None usa el default de FCEN.
+    path_actas : str | None
+        Ruta a reporte_actas_desde_2005.csv. Si es None usa el default de FCEN.
+    min_materias_sin_tesis : int
+        Mínimo de materias del plan (sin tesis) aprobadas para condición 2 (default: 22).
+    min_materias_fuera_de_plan : int
+        Mínimo de materias fuera del temario aprobadas para condición 2 (default: 2).
+
+    Retorna
+    -------
+    pd.DataFrame
+        Columnas: dni, año_inscripcion_facultad, carrera_principal, anio_egreso.
+        Un registro por DNI que cumple condición 1 o condición 2.
+    """
+    path_personas = Path(path_personas) if path_personas else _DEFAULT_PERSONAS
+    path_actas = Path(path_actas) if path_actas else _DEFAULT_ACTAS
+
+    TESIS = _normalizar("Tesis de Licenciatura")
+
+    # --- Materias del plan (normalizadas), separando tesis ---
+    with open(path_yaml, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        todas_las_materias = {
+            _normalizar(m) for plan in config["planes"] for m in plan["materias"]
+        }
+    materias_sin_tesis = todas_las_materias - {TESIS}
+
+    # --- Personas ---
+    personas = pd.read_csv(
+        path_personas,
+        usecols=["dni", "carrera_principal", "año_inscripcion_facultad"],
+        dtype={"dni": str},
+    )
+    personas = personas[personas["carrera_principal"].isin(carreras)].copy()
+
+    # --- Actas: Acta de Examen + Aprobado para los DNIs relevantes ---
+    actas_raw = pd.read_csv(path_actas, encoding="latin-1", dtype={"dni": str})
+    actas_raw["materia"] = actas_raw["materia"].apply(lambda x: _normalizar(str(x)))
+    actas_raw["fecha"] = pd.to_datetime(actas_raw["fecha"], format="%Y-%m-%d", errors="coerce")
+
+    actas_raw = actas_raw[
+        actas_raw["dni"].isin(personas["dni"])
+        & (actas_raw["tipo_acta"] == "Acta de Examen")
+        & (actas_raw["resultado"] == "Aprobado")
+    ].copy()
+
+    # Deduplicar por (dni, materia): quedarse con el registro más reciente
+    actas_raw = actas_raw.sort_values("fecha").drop_duplicates(
+        subset=["dni", "materia"], keep="last"
+    )
+
+    # -----------------------------------------------------------------------
+    # Condición 1: tiene TESIS DE LICENCIATURA aprobada
+    # -----------------------------------------------------------------------
+    actas_tesis = actas_raw[actas_raw["materia"] == TESIS][["dni", "fecha"]].copy()
+    actas_tesis["anio_egreso"] = actas_tesis["fecha"].dt.year
+
+    dnis_con_tesis = set(actas_tesis["dni"].unique())
+
+    # -----------------------------------------------------------------------
+    # Condición 2: sin tesis — al menos min_materias_sin_tesis del plan aprobadas
+    # -----------------------------------------------------------------------
+    actas_sin_tesis = actas_raw[
+        ~actas_raw["dni"].isin(dnis_con_tesis)
+        & actas_raw["materia"].isin(materias_sin_tesis)
+    ].copy()
+
+    conteo = actas_sin_tesis.groupby("dni")["materia"].count()
+    dnis_cond2 = set(conteo[conteo >= min_materias_sin_tesis].index)
+
+    # Materias fuera del plan para esos DNIs
+    conteo_fuera = (
+        actas_raw[
+            ~actas_raw["materia"].isin(todas_las_materias)
+            & actas_raw["dni"].isin(dnis_cond2)
+        ]
+        .groupby("dni")["materia"]
+        .count()
+    )
+    dnis_cond2 = dnis_cond2 & set(conteo_fuera[conteo_fuera >= min_materias_fuera_de_plan].index)
+
+    egresados_cond2 = (
+        actas_sin_tesis[actas_sin_tesis["dni"].isin(dnis_cond2)]
+        .groupby("dni")["fecha"]
+        .max()
+        .dt.year
+        .reset_index()
+        .rename(columns={"fecha": "anio_egreso"})
+    )
+
+    # -----------------------------------------------------------------------
+    # Resultado final
+    # -----------------------------------------------------------------------
+    egresados = pd.concat(
+        [actas_tesis[["dni", "anio_egreso"]], egresados_cond2],
+        ignore_index=True,
+    )
+
+    resultado = egresados.merge(
+        personas[["dni", "año_inscripcion_facultad", "carrera_principal"]],
+        on="dni",
+        how="left",
+    )
+
+    return (
+        resultado[["dni", "año_inscripcion_facultad", "carrera_principal", "anio_egreso"]]
+        .drop_duplicates(subset=["dni"])
+        .reset_index(drop=True)
+    )
+
+
+def plot_egresados_fisica_por_anio(df: pd.DataFrame) -> None:
+    """Genera un par de barplots por cada año de egreso con la distribución de cohortes.
+
+    Delega en plot_egresados_por_anio para cada valor distinto de 'anio_egreso'
+    presente en el DataFrame.
+
+    Parámetros
+    ----------
+    df : pd.DataFrame
+        DataFrame devuelto por get_egresados_fisica, con columnas
+        'dni', 'año_inscripcion_facultad' y 'anio_egreso'.
+    """
+    for anio, grupo in df.groupby("anio_egreso"):
+        plot_egresados_por_anio(grupo, anio)
+
