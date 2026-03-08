@@ -428,6 +428,7 @@ def plot_egresados_por_anio(df: pd.DataFrame, anio: int) -> None:
         DataFrame devuelto por get_egresados, con columnas 'dni' y
         'año_inscripcion_facultad'.
     """
+    sns.set_theme(style="darkgrid")
     resumen = (
         df.groupby("año_inscripcion_facultad")["dni"]
         .count()
@@ -719,7 +720,7 @@ def get_egresados_fisica(
     Condición 2: el DNI no tiene "TESIS DE LICENCIATURA" pero aprobó al menos
     'min_materias_sin_tesis' de las 24 materias restantes del plan Y al menos
     'min_materias_fuera_de_plan' materias fuera del temario de física.
-        → anio_egreso = año de la última materia aprobada del listado (sin tesis).
+        → anio_egreso = año de la última materia obligatoria aprobada del listado (sin tesis).
 
     El umbral por defecto (22) equivale al 90% de las 24 materias sin tesis.
 
