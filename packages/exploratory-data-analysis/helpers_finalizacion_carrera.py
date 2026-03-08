@@ -615,6 +615,10 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
         .sort_values("tiempo_cursando", ascending=False)
     )
 
+    grand_total = tabla["total_egreso"].sum()
+
+    sns.set_theme(style="dark")
+
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.bar(tabla["tiempo_cursando"], tabla["total_egreso"])
     ax.set_xlabel("Años cursando")
@@ -622,6 +626,10 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
     ax.set_title(f"Egresados por tiempo cursando ({anio_desde}–{anio_hasta}). Carrera: {carrera}")
     ax.set_xticks(tabla["tiempo_cursando"])
     ax.invert_xaxis()
+    ax_right = ax.twinx()
+    ax_right.set_ylim(ax.get_ylim()[0] / grand_total, ax.get_ylim()[1] / grand_total)
+    ax_right.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
+    ax_right.set_ylabel("Proporción")
     plt.tight_layout()
     plt.show()
 
@@ -637,11 +645,16 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
     ax.set_xlabel("Años cursando")
     ax.set_ylabel("Total de egresados")
     ax.set_title(f"Distribución del tiempo de cursada al momento de egreso ({anio_desde}–{anio_hasta}). Carrera: {carrera}")
-    ax.legend(title="Año de egreso", bbox_to_anchor=(1.01, 1), loc="upper left")
+    ax.legend(title="Año de egreso", bbox_to_anchor=(1.05, 1), loc="upper left")
     ax.tick_params(axis="x", rotation=0)
+    ax_right2 = ax.twinx()
+    ax_right2.set_ylim(ax.get_ylim()[0] / grand_total, ax.get_ylim()[1] / grand_total)
+    ax_right2.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
+    ax_right2.set_ylabel("Proporción")
     plt.tight_layout()
     plt.show()
 
     print(tabla.to_string(index=False))
     print(pivot.to_string())
+    print(f"Total de egresados en el período: {grand_total}")
 
