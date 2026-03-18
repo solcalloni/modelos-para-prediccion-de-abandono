@@ -563,7 +563,6 @@ def plot_egresados_por_anio(resumen: pd.DataFrame, anio: int, carrera: str) -> N
     plt.tight_layout()
     plt.show()
 
-
 def plot_todos_anios_egreso(df: pd.DataFrame, carrera: str) -> None:
     """Genera un par de barplots por cada año de egreso con la distribución de cohortes.
 
@@ -584,6 +583,67 @@ def plot_todos_anios_egreso(df: pd.DataFrame, carrera: str) -> None:
         plot_egresados_por_anio(resumen, anio, carrera)
 
 
+def plot_egresados_por_anio_cantidad_y_k(resumen: pd.DataFrame, anio: int, carrera: str) -> None:
+    """Genera dos barplots de egresados por año de inscripción: cantidad absoluta y proporción.
+
+    Parámetros
+    ----------
+    resumen : pd.DataFrame
+        DataFrame devuelto por resumir_egresados_por_anio, con columnas
+        'año_inscripcion_facultad', 'cantidad_egresados' y 'proporcion'.
+    anio : int
+        Año de egreso que aparece en los títulos de los gráficos.
+    carrera : str
+        Nombre de la carrera para el título del gráfico.
+    """
+    sns.set_theme(style="darkgrid")
+    orden = resumen["año_inscripcion_facultad"]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    sns.barplot(data=resumen, x="año_inscripcion_facultad", y="cantidad_egresados", order=orden, ax=ax)
+    ax.set_xlabel("Año de inscripción a la facultad", fontsize=15)
+    ax.set_ylabel("Cantidad de egresados", fontsize=15)
+    ax.set_title(f"Cantidad de egresados en {anio} por año de inscripción. Carrera: {carrera}", fontsize=15)
+    ax.tick_params(axis="x", rotation=45, labelsize=13)
+    ax.tick_params(axis="y", labelsize=13)
+
+    idx_max = resumen["cantidad_egresados"].idxmax()
+    anio_inscripcion_max = resumen.loc[idx_max, "año_inscripcion_facultad"]
+    cant_max = resumen.loc[idx_max, "cantidad_egresados"]
+    k = anio - anio_inscripcion_max + 1
+
+    pos_x = orden.reset_index(drop=True)[orden.reset_index(drop=True) == anio_inscripcion_max].index[0]
+    ax.text(pos_x, cant_max, f"k = {k}", ha="center", va="bottom", fontsize=12, fontweight="bold")
+
+    plt.show()
+
+def plot_todos_anios_egreso_solo_cantidad_y_k(anio_minimo, anio_maximo, carrera: str) -> None:
+    """Genera un barplot por cada año de egreso con la distribución de cohortes.
+
+    Delega en plot_egresados_por_anio_cantidad_y_k para cada valor distinto de 'anio_egreso'
+    presente en el DataFrame.
+
+    Parámetros
+    ----------
+    df : pd.DataFrame
+        DataFrame devuelto por get_egresados_fisica, con columnas
+        'dni', 'año_inscripcion_facultad' y 'anio_egreso'.
+    """
+    carrera_titulo = carrera
+    carrera = _normalizar(carrera)
+    carrera = carrera.lower()
+    for anio in range(anio_minimo, anio_maximo + 1):
+        path_csv = (
+            _DEFAULT_DATOS_AGRUPADOS
+            / carrera
+            / f"resumen_egresados_{carrera}_{anio}.csv"
+        )
+        if not path_csv.exists():
+            continue
+        resumen = pd.read_csv(path_csv)
+        plot_egresados_por_anio_cantidad_y_k(resumen, anio, carrera_titulo)
+
 def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_hasta: int) -> None:
     """Genera dos gráficos sobre el tiempo de cursada de los egresados en un rango de años.
 
@@ -593,9 +653,9 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
     Parámetros
     ----------
     df : pd.DataFrame
-        DataFrame pre-agregado con columnas 'cantidad_egresados', 'anio_egreso' y
-        'año_inscripcion_facultad' (concatenación de archivos resumen_egresados_*.csv
-        de assets/datos_agrupados).
+        DataFrame pre-agregado con columnas 'cantidad_egresados', 'proporcion',
+        'anio_egreso' y 'año_inscripcion_facultad' (concatenación de archivos
+        resumen_egresados_*.csv de assets/datos_agrupados).
     carrera : str
         Nombre de la carrera (usado en los títulos).
     anio_desde : int
@@ -612,7 +672,7 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
         filtrado.groupby("tiempo_cursando")["cantidad_egresados"]
         .sum()
         .reset_index(name="total_egreso")
-        .sort_values("tiempo_cursando", ascending=False)
+        .sort_values("tiempo_cursando")
     )
 
     grand_total = tabla["total_egreso"].sum()
@@ -625,7 +685,6 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
     ax.set_ylabel("Total de egresados")
     ax.set_title(f"Egresados por tiempo cursando ({anio_desde}–{anio_hasta}). Carrera: {carrera}")
     ax.set_xticks(tabla["tiempo_cursando"])
-    ax.invert_xaxis()
     ax_right = ax.twinx()
     ax_right.set_ylim(ax.get_ylim()[0] / grand_total, ax.get_ylim()[1] / grand_total)
     ax_right.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
@@ -638,23 +697,34 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
         .sum()
         .unstack(fill_value=0)
     )
-    pivot = pivot.loc[sorted(pivot.index, reverse=True)]
+    pivot = pivot.loc[sorted(pivot.index)]
+
+    n_cohortes = filtrado["anio_egreso"].nunique()
+    prom_ponderado = filtrado.groupby("tiempo_cursando")["proporcion"].sum() / n_cohortes
 
     fig, ax = plt.subplots(figsize=(12, 6))
     pivot.plot(kind="bar", stacked=True, ax=ax, colormap="tab20")
-    ax.set_xlabel("Años cursando")
-    ax.set_ylabel("Total de egresados")
-    ax.set_title(f"Distribución del tiempo de cursada al momento de egreso ({anio_desde}–{anio_hasta}). Carrera: {carrera}")
-    ax.legend(title="Año de egreso", bbox_to_anchor=(1.05, 1), loc="upper left")
-    ax.tick_params(axis="x", rotation=0)
+    ax.set_xlabel("Cantidad de años cursando", fontsize=15)
+    ax.set_ylabel("Cantidad de egresados", fontsize=15)
+    ax.set_title(f"Tiempo de cursada al momento de egreso ({anio_desde}–{anio_hasta}). Carrera: {carrera}", fontsize=15)
+    ax.legend(title="Año de egreso", bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=12)
+    ax.tick_params(axis="x", rotation=0, labelsize=13)
+    ax.tick_params(axis="y", labelsize=13)
+    for i, tc in enumerate(pivot.index):
+        total_height = pivot.loc[tc].sum()
+        valor = prom_ponderado.get(tc, 0)
+        ax.text(i, total_height, f"{valor:.1%}", ha="center", va="bottom", fontsize=11)
     ax_right2 = ax.twinx()
     ax_right2.set_ylim(ax.get_ylim()[0] / grand_total, ax.get_ylim()[1] / grand_total)
     ax_right2.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
-    ax_right2.set_ylabel("Proporción")
+    ax_right2.tick_params(axis="y", labelsize=13)
+    ax_right2.set_ylabel("% de egresados", fontsize=13)
     plt.tight_layout()
     plt.show()
 
     print(tabla.to_string(index=False))
     print(pivot.to_string())
+    print(f"Promedio ponderado de proporción por tiempo cursando: {prom_ponderado.to_string()}")
     print(f"Total de egresados en el período: {grand_total}")
+    return tabla, pivot
 
