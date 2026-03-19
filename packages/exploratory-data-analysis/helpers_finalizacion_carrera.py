@@ -728,3 +728,55 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
     print(f"Total de egresados en el período: {grand_total}")
     return tabla, pivot
 
+def estimacion_abandono(carrera, titulo):
+
+    # calculamos los egresados por año de egreso y año de inscripción
+    egresados_2012_2025 = pd.DataFrame()
+    for anio in range(2012, 2026):
+        egresados = pd.read_csv(f'../../../assets/datos_agrupados/{carrera}/resumen_egresados_{carrera}_{anio}.csv')
+        egresados_2012_2025 = pd.concat([egresados_2012_2025, egresados])
+    
+    # agrupamos por año de inscripción y sumamos la cantidad de egresados
+    total_egresados_por_anio_inscripcion = egresados_2012_2025.groupby('año_inscripcion_facultad')['cantidad_egresados'].sum().reset_index()
+
+    # calculamos los inscriptos por año de inscripción
+    personas = pd.read_csv(
+        "../../../assets/bronze/FCEN/FCEN_oficial_2005_2025/reporte_personas_desde_2005.csv",
+        usecols=["dni", "carrera_principal", "año_inscripcion_facultad"],
+        dtype={"dni": str},
+    )
+    personas_carrera = personas[personas['carrera_principal'] == titulo]
+    inscripciones_por_anio = personas_carrera.groupby('año_inscripcion_facultad')['dni'].nunique().reset_index()
+    inscripciones_por_anio.rename(columns={'dni': 'cantidad_inscripciones'}, inplace=True)
+    
+    calculo = inscripciones_por_anio.merge(total_egresados_por_anio_inscripcion, on='año_inscripcion_facultad', how='left')
+
+    # calculamos el abandono y la tasa de abandono
+    calculo['tasa_egreso'] = calculo['cantidad_egresados'] / calculo['cantidad_inscripciones']
+    calculo['abandono'] = calculo['cantidad_inscripciones'] - calculo['cantidad_egresados']
+    calculo['tasa_abandono'] = calculo['abandono'] / calculo['cantidad_inscripciones']
+
+    # calculamos abadono considerando solo los que tardaron 15 años o menos
+    egresados_15_anios_2005_2011 = (
+            egresados_2012_2025[
+                (egresados_2012_2025['año_inscripcion_facultad'].between(2005, 2011))
+                & (
+                    egresados_2012_2025['anio_egreso']
+                    <= egresados_2012_2025['año_inscripcion_facultad'] + 14
+                )
+            ]
+            .groupby('año_inscripcion_facultad', as_index=False)['cantidad_egresados']
+            .sum()
+            .rename(columns={'cantidad_egresados': 'egresados_en_15_anios_o_menos'})
+    )
+    calculo_15_años = inscripciones_por_anio.merge(egresados_15_anios_2005_2011, on='año_inscripcion_facultad', how='left')
+    calculo_15_años['tasa_egreso_15_años'] = calculo_15_años['egresados_en_15_anios_o_menos'] / calculo_15_años['cantidad_inscripciones']
+    calculo_15_años['abandono_15_años'] = calculo_15_años['cantidad_inscripciones'] - calculo_15_años['egresados_en_15_anios_o_menos']
+    calculo_15_años['tasa_abandono_15_años'] = calculo_15_años['abandono_15_años'] / calculo_15_años['cantidad_inscripciones']
+    calculo_15_años = calculo_15_años[calculo_15_años['año_inscripcion_facultad'].between(2005, 2011)]
+
+    # calculamos el d
+    calculo_para_d = calculo[calculo['año_inscripcion_facultad'].between(2005, 2011)][['año_inscripcion_facultad', 'cantidad_egresados']]
+    calculo_15_años['d'] = (calculo_para_d['cantidad_egresados'] - calculo_15_años['egresados_en_15_anios_o_menos'])/ calculo_15_años['cantidad_inscripciones']
+
+    return total_egresados_por_anio_inscripcion, inscripciones_por_anio, calculo, calculo_15_años
