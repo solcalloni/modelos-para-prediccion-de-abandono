@@ -584,7 +584,7 @@ def plot_todos_anios_egreso(df: pd.DataFrame, carrera: str) -> None:
 
 
 def plot_egresados_por_anio_cantidad_y_k(resumen: pd.DataFrame, anio: int, carrera: str) -> None:
-    """Genera dos barplots de egresados por año de inscripción: cantidad absoluta y proporción.
+    """Genera un barplot de egresados por años de cursada.
 
     Parámetros
     ----------
@@ -597,23 +597,70 @@ def plot_egresados_por_anio_cantidad_y_k(resumen: pd.DataFrame, anio: int, carre
         Nombre de la carrera para el título del gráfico.
     """
     sns.set_theme(style="darkgrid")
-    orden = resumen["año_inscripcion_facultad"]
+    resumen_plot = resumen.copy()
+    resumen_plot["anios_cursada"] = anio - resumen_plot["año_inscripcion_facultad"] + 1
+    resumen_plot = resumen_plot.sort_values("anios_cursada").reset_index(drop=True)
+
+    orden = resumen_plot["anios_cursada"]
+    cantidades = resumen_plot["cantidad_egresados"].tolist()
 
     fig, ax = plt.subplots(figsize=(10, 5))
 
-    sns.barplot(data=resumen, x="año_inscripcion_facultad", y="cantidad_egresados", order=orden, ax=ax)
-    ax.set_xlabel("Año de inscripción a la facultad", fontsize=15)
+    sns.barplot(data=resumen_plot, x="anios_cursada", y="cantidad_egresados", order=orden, ax=ax)
+    ax.set_xlabel("Años de cursada", fontsize=15)
     ax.set_ylabel("Cantidad de egresados", fontsize=15)
-    ax.set_title(f"Cantidad de egresados en {anio} por año de inscripción. Carrera: {carrera}", fontsize=15)
-    ax.tick_params(axis="x", rotation=45, labelsize=13)
+    ax.set_title(f"Cantidad de egresados en {anio} por años de cursada. Carrera: {carrera}", fontsize=15)
+    ax.tick_params(axis="x", labelsize=13)
     ax.tick_params(axis="y", labelsize=13)
 
-    idx_max = resumen["cantidad_egresados"].idxmax()
-    anio_inscripcion_max = resumen.loc[idx_max, "año_inscripcion_facultad"]
-    cant_max = resumen.loc[idx_max, "cantidad_egresados"]
-    k = anio - anio_inscripcion_max + 1
+    idx_max = resumen_plot["cantidad_egresados"].idxmax()
+    cant_max = resumen_plot.loc[idx_max, "cantidad_egresados"]
+    k = resumen_plot.loc[idx_max, "anios_cursada"]
 
-    pos_x = orden.reset_index(drop=True)[orden.reset_index(drop=True) == anio_inscripcion_max].index[0]
+    # Selecciona el tramo consecutivo que contiene la barra de k y se aproxima al 90%.
+    pos_k = idx_max
+    total = sum(cantidades)
+    objetivo = 0.9 * total
+    n_barras = len(cantidades)
+    k_en_borde = pos_k == 0 or pos_k == n_barras - 1
+
+    mejor_tramo = None
+    for izq in range(0, pos_k + 1):
+        for der in range(pos_k, n_barras):
+            if not k_en_borde and not (izq < pos_k and der > pos_k):
+                continue
+            suma_tramo = sum(cantidades[izq : der + 1])
+            distancia = abs(suma_tramo - objetivo)
+            usa_ambos_lados = izq < pos_k and der > pos_k
+            criterio = (distancia, 0 if usa_ambos_lados else 1, der - izq)
+            if mejor_tramo is None or criterio < mejor_tramo[0]:
+                mejor_tramo = (criterio, izq, der)
+
+    if mejor_tramo is not None:
+        print(f"Mejor tramo para k={k}: {mejor_tramo[1]} a {mejor_tramo[2]}, suma={sum(cantidades[mejor_tramo[1] : mejor_tramo[2] + 1])} (objetivo={objetivo:.1f})")
+        _, izq_sombreado, der_sombreado = mejor_tramo
+        ax.axvspan(
+            izq_sombreado - 0.5,
+            der_sombreado + 0.5,
+            color="#f7c6d9",
+            alpha=0.35,
+            zorder=0,
+        )
+        x_centro = (izq_sombreado + der_sombreado) / 2 + 1
+        y_texto = ax.get_ylim()[1] * 0.93
+        ax.text(
+            x_centro,
+            y_texto,
+            "90%",
+            ha="center",
+            va="center",
+            fontsize=12,
+            fontweight="bold",
+            color="#8a2d55",
+            bbox={"facecolor": "white", "alpha": 0.7, "edgecolor": "none", "pad": 2},
+        )
+
+    pos_x = pos_k
     ax.text(pos_x, cant_max, f"k = {k}", ha="center", va="bottom", fontsize=12, fontweight="bold")
 
     plt.show()
