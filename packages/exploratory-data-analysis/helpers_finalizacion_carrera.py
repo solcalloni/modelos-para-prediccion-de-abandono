@@ -767,10 +767,66 @@ def plot_tiempo_cursando(
     ax.tick_params(axis="x", rotation=0, labelsize=13)
     ax.tick_params(axis="y", labelsize=13)
 
+    ## segundo grafico: sombrear el tramo que contiene k y se aproxima al 90% del total
+
+    totales_por_tiempo = pivot.sum(axis=1)
+    cantidades = totales_por_tiempo.tolist()
+    pos_k = pivot.index.get_loc(totales_por_tiempo.idxmax())
+    total = sum(cantidades)
+    objetivo = 0.9 * total
+    n_barras = len(cantidades)
+    k_en_borde = pos_k == 0 or pos_k == n_barras - 1
+
+    mejor_tramo = None
+    for izq in range(0, pos_k + 1):
+        for der in range(pos_k, n_barras):
+            if not k_en_borde and not (izq < pos_k and der > pos_k):
+                continue
+            suma_tramo = sum(cantidades[izq : der + 1])
+            distancia = abs(suma_tramo - objetivo)
+            usa_ambos_lados = izq < pos_k and der > pos_k
+            criterio = (distancia, 0 if usa_ambos_lados else 1, der - izq)
+            if mejor_tramo is None or criterio < mejor_tramo[0]:
+                mejor_tramo = (criterio, izq, der)
+
+    if mejor_tramo is not None:
+        _, izq_sombreado, der_sombreado = mejor_tramo
+        ax.axvspan(
+            izq_sombreado - 0.5,
+            der_sombreado + 0.5,
+            color="#f7c6d9",
+            alpha=0.35,
+            zorder=0,
+        )
+        x_centro = (izq_sombreado + der_sombreado) / 2 + 1.8
+        y_texto = ax.get_ylim()[1] * 0.90
+        ax.text(
+            x_centro,
+            y_texto,
+            "90%",
+            ha="center",
+            va="center",
+            fontsize=12,
+            fontweight="bold",
+            color="#8a2d55",
+            bbox={"facecolor": "white", "alpha": 0.7, "edgecolor": "none", "pad": 2},
+        )
+
+    valor_k = pivot.index[pos_k]
+    altura_k = cantidades[pos_k]/2
+    ax.text(
+        pos_k,
+        altura_k,
+        f"k",
+        ha="center",
+        va="bottom",
+        fontsize=12,
+        fontweight="bold",
+    )
+
     if mostrar_rectas_verticales:
         # Posiciones de cortes verticales sobre el eje categórico de barras.
         idx_pivot = pivot.index
-        totales_por_tiempo = pivot.sum(axis=1)
         pos_columna_mas_alta = idx_pivot.get_loc(totales_por_tiempo.idxmax())
 
         def _posicion_entre(val_izq: int, val_der: int) -> Optional[float]:
