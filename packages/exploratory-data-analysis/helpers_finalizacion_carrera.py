@@ -644,7 +644,13 @@ def plot_todos_anios_egreso_solo_cantidad_y_k(anio_minimo, anio_maximo, carrera:
         resumen = pd.read_csv(path_csv)
         plot_egresados_por_anio_cantidad_y_k(resumen, anio, carrera_titulo)
 
-def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_hasta: int) -> None:
+def plot_tiempo_cursando(
+    df: pd.DataFrame,
+    carrera: str,
+    anio_desde: int,
+    anio_hasta: int,
+    mostrar_rectas_verticales: bool = False,
+) -> None:
     """Genera dos gráficos sobre el tiempo de cursada de los egresados en un rango de años.
 
     El primero muestra la cantidad total de egresados por años cursando.
@@ -662,6 +668,9 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
         Año de egreso mínimo (inclusive).
     anio_hasta : int
         Año de egreso máximo (inclusive).
+    mostrar_rectas_verticales : bool
+        Si True, agrega tres rectas verticales en el segundo gráfico:
+        a la izquierda de la columna más alta, entre 10-11 y entre 15-16.
     """
     df = df.copy()
     df["tiempo_cursando"] = df["anio_egreso"] - df["año_inscripcion_facultad"] + 1
@@ -710,10 +719,57 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
     ax.legend(title="Año de egreso", bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=12)
     ax.tick_params(axis="x", rotation=0, labelsize=13)
     ax.tick_params(axis="y", labelsize=13)
+
+    if mostrar_rectas_verticales:
+        # Posiciones de cortes verticales sobre el eje categórico de barras.
+        idx_pivot = pivot.index
+        totales_por_tiempo = pivot.sum(axis=1)
+        pos_columna_mas_alta = idx_pivot.get_loc(totales_por_tiempo.idxmax())
+
+        def _posicion_entre(val_izq: int, val_der: int) -> Optional[float]:
+            en_izq = val_izq in idx_pivot
+            en_der = val_der in idx_pivot
+
+            if en_izq and en_der:
+                return (idx_pivot.get_loc(val_izq) + idx_pivot.get_loc(val_der)) / 2
+            if en_izq:
+                return idx_pivot.get_loc(val_izq) + 0.5
+            if en_der:
+                return idx_pivot.get_loc(val_der) - 0.5
+            return None
+
+        # 1) División inmediatamente a la izquierda de la columna más alta.
+        corte_pico = pos_columna_mas_alta - 0.5
+        if corte_pico >= -0.5:
+            ax.axvline(x=corte_pico, color="black", linestyle="--", linewidth=2)
+
+        # 2) Corte entre 10 y 11 años cursando.
+        corte_10_11 = _posicion_entre(10, 11)
+        if corte_10_11 is not None:
+            ax.axvline(x=corte_10_11, color="green", linestyle="--", linewidth=2)
+
+        # 3) Corte entre 15 y 16 años cursando.
+        corte_15_16 = _posicion_entre(15, 16)
+        if corte_15_16 is not None:
+            ax.axvline(x=corte_15_16, color="blue", linestyle="--", linewidth=2)
+
+        # Etiquetas de tramos: a | b | c | d.
+        if corte_10_11 is not None and corte_15_16 is not None:
+            x_min, x_max = ax.get_xlim()
+            y_top = ax.get_ylim()[1] * 0.96
+            segmentos = [
+                ("a", (x_min + corte_pico) / 2),
+                ("b", (corte_pico + corte_10_11) / 2),
+                ("c", (corte_10_11 + corte_15_16) / 2),
+                ("d", (corte_15_16 + x_max) / 2),
+            ]
+            for etiqueta, x_pos in segmentos:
+                ax.text(x_pos, y_top, etiqueta, ha="center", va="top", fontsize=14, fontweight="bold")
+
     for i, tc in enumerate(pivot.index):
         total_height = pivot.loc[tc].sum()
-        valor = prom_ponderado.get(tc, 0)
-        ax.text(i, total_height, f"{valor:.1%}", ha="center", va="bottom", fontsize=11)
+        proporcion_simple = (total_height / grand_total) if grand_total else 0
+        ax.text(i, total_height, f"{proporcion_simple:.1%}", ha="center", va="bottom", fontsize=11)
     ax_right2 = ax.twinx()
     ax_right2.set_ylim(ax.get_ylim()[0] / grand_total, ax.get_ylim()[1] / grand_total)
     ax_right2.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
@@ -726,7 +782,7 @@ def plot_tiempo_cursando(df: pd.DataFrame, carrera: str, anio_desde: int, anio_h
     print(pivot.to_string())
     print(f"Promedio ponderado de proporción por tiempo cursando: {prom_ponderado.to_string()}")
     print(f"Total de egresados en el período: {grand_total}")
-    return tabla, pivot
+    return tabla, pivot, prom_ponderado
 
 def estimacion_abandono(carrera, titulo):
 
