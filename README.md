@@ -9,11 +9,13 @@ Co-director: Guillermo Durán
 
 </div>
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 
-Repositorio principal para el desarrollo de la tesis de Licenciatura en Ciencias de Datos de Sol Calloni
+Repositorio principal de la tesis de Licenciatura en Ciencias de Datos de Sol Calloni.
 
-Se busca entrenar un modelo de Aprendizaje Automático para identificar a los estudiantes de la Facultad de Ciencias Exactas y Naturales (FCEN) de la Universidad Nacional de Buenos Aires (UBA) que se encuentran en riesgo de abandono. Los datos provienen del SIU-Guaraní (Sistema de Información Universitario Guaraní) del CBC (Ciclo Básico Común), del SIU-Guaraní del FCEN y de una encuesta a los ingresantes al FCEN.
+Se busca entrenar un modelo de Aprendizaje Automático para identificar a los estudiantes de la Facultad de Ciencias Exactas y Naturales (FCEN) de la Universidad Nacional de Buenos Aires (UBA) que se encuentran en riesgo de abandono. Los datos provienen del SIU-Guaraní (Sistema de Información Universitario Guaraní) del CBC (Ciclo Básico Común), del SIU-Guaraní del FCEN y de una encuesta a los ingresantes a la FCEN realizada por el programa +Acompañamiento.
+
+A su vez, en la carpeta `packages/exploratory-data-analysis/FCEN_2005_2025` se encuentra el trabajo realizado para el trabajo "Un estimador estadístico del abandono para carreras de la facultad de Ciencias Exactas y Naturales de la Universidad de Buenos Aires" de Sol Calloni y Martin Pustilnik. También se encuentran los datos agrupados en la carpeta `assets/datos_agrupados`
 
 ## Setup
 
@@ -76,3 +78,42 @@ Para desactivar el entorno virtual:
 ```bash
 deactivate
 ```
+
+## Archivos del repositorio
+
+```
+├── README.md
+├── assets
+│   ├── bronze
+│   ├── datos_agrupados
+│   │   ├── biologia
+│   │   ├── computacion
+│   │   └── fisica
+│   ├── gold
+│   ├── resultados_modelos
+│   └── silver
+├── images
+│   └── logofcen.jpg
+├── packages
+│   ├── constants
+│   │   ├── materias_biologia.yaml
+│   │   ├── materias_computacion.yaml
+│   │   └── materias_fisica.yaml
+│   ├── experiments
+│   │   ├── 01-division_datos.ipynb
+│   │   ├── 02-experimento_0.ipynb
+│   │   ├── 03-experimento_1.ipynb
+│   │   ├── 04-experimento_2.ipynb
+│   │   ├── 05-analisis_de_arboles.ipynb
+│   │   └── 06-analisis_de_arboles.ipynb
+│   └── exploratory-data-analysis
+│       ├── CBC
+│       ├── FCEN
+│       ├── FCEN_2005_2025
+│       ├── datos_unificados
+│       ├── distancia_de_viaje.ipynb
+│       ├── encuestas
+├── requirements.txt
+└── set_up.sh
+```
+
