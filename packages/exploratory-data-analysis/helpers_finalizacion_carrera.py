@@ -763,7 +763,7 @@ def plot_tiempo_cursando(
     ax.set_xlabel("Cantidad de años cursando", fontsize=15)
     ax.set_ylabel("Cantidad de egresados", fontsize=15)
     ax.set_title(f"Tiempo de cursada al momento de egreso ({anio_desde}–{anio_hasta}). Carrera: {carrera}", fontsize=15)
-    ax.legend(title="Año de egreso", bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=12)
+    ax.legend(title="Año de egreso", loc="right", fontsize=12)
     ax.tick_params(axis="x", rotation=0, labelsize=13)
     ax.tick_params(axis="y", labelsize=13)
 
@@ -915,6 +915,14 @@ def estimacion_abandono(carrera, titulo):
     calculo['abandono'] = calculo['cantidad_inscripciones'] - calculo['cantidad_egresados']
     calculo['tasa_abandono'] = calculo['abandono'] / calculo['cantidad_inscripciones']
 
+    # definimos el d
+    if carrera == 'fisica':
+        d = 0.019886363636363636
+    elif carrera == 'biologia':
+        d = 0.03324468085106383
+    elif carrera == 'computacion':
+        d = 0.034722222222222224
+
     # calculamos abadono considerando solo los que tardaron 15 años o menos
     egresados_15_anios_2005_2011 = (
             egresados_2012_2025[
@@ -931,11 +939,42 @@ def estimacion_abandono(carrera, titulo):
     calculo_15_años = inscripciones_por_anio.merge(egresados_15_anios_2005_2011, on='año_inscripcion_facultad', how='left')
     calculo_15_años['tasa_egreso_15_años'] = calculo_15_años['egresados_en_15_anios_o_menos'] / calculo_15_años['cantidad_inscripciones']
     calculo_15_años['abandono_15_años'] = calculo_15_años['cantidad_inscripciones'] - calculo_15_años['egresados_en_15_anios_o_menos']
+    calculo_15_años['abandono_15_años_con_d'] = calculo_15_años['abandono_15_años'] - d * calculo_15_años['egresados_en_15_anios_o_menos']
     calculo_15_años['tasa_abandono_15_años'] = calculo_15_años['abandono_15_años'] / calculo_15_años['cantidad_inscripciones']
     calculo_15_años = calculo_15_años[calculo_15_años['año_inscripcion_facultad'].between(2005, 2011)]
+    calculo_15_años['tasa_egreso_15_años_con_d'] = (calculo_15_años['egresados_en_15_anios_o_menos'] + d * calculo_15_años['egresados_en_15_anios_o_menos']) / calculo_15_años['cantidad_inscripciones']
+    calculo_15_años['tasa_abandono_15_años_con_d'] = calculo_15_años['abandono_15_años_con_d'] / calculo_15_años['cantidad_inscripciones']
 
     # calculamos el d
     calculo_para_d = calculo[calculo['año_inscripcion_facultad'].between(2005, 2011)][['año_inscripcion_facultad', 'cantidad_egresados']]
-    calculo_15_años['d'] = (calculo_para_d['cantidad_egresados'] - calculo_15_años['egresados_en_15_anios_o_menos'])/ calculo_15_años['cantidad_inscripciones']
+    calculo_15_años['d_de_carrera'] = d
+    calculo_15_años['d_del_año'] = (calculo_para_d['cantidad_egresados'] - calculo_15_años['egresados_en_15_anios_o_menos'])/ calculo_15_años['cantidad_inscripciones']
+    calculo_15_años['error_d'] = calculo_15_años['d_del_año'] - d
 
     return total_egresados_por_anio_inscripcion, inscripciones_por_anio, calculo, calculo_15_años
+
+
+def estimacion_egresados_2019_vs_2020(carrera):
+    egresados_2019 = pd.read_csv(f'../../../assets/datos_agrupados/{carrera}/resumen_egresados_{carrera}_2019.csv')
+    egresados_2019['tiempo_desde_inscripcion'] = 2019 - egresados_2019['año_inscripcion_facultad'] +1
+
+    # definimos el d
+    if carrera == 'fisica':
+        d = 0.019886363636363636
+    elif carrera == 'biologia':
+        d = 0.03324468085106383
+    elif carrera == 'computacion':
+        d = 0.034722222222222224   
+
+    egresados_en_15_años_o_menos_2019 = egresados_2019[egresados_2019['tiempo_desde_inscripcion'] <= 15]['cantidad_egresados'].sum()
+    estimacion_2019 = egresados_en_15_años_o_menos_2019 + d * egresados_2019['cantidad_egresados'].sum()
+
+    egresados_2020 = pd.read_csv(f'../../../assets/datos_agrupados/{carrera}/resumen_egresados_{carrera}_2020.csv')
+    egresados_2020['tiempo_desde_inscripcion'] = 2020 - egresados_2020['año_inscripcion_facultad'] +1
+    
+    egresados_en_15_años_o_menos_2020 = egresados_2020[egresados_2020['tiempo_desde_inscripcion'] <= 15]['cantidad_egresados'].sum()
+    estimacion_2020 = egresados_en_15_años_o_menos_2020 + d * egresados_2020['cantidad_egresados'].sum()
+
+    variacion = (estimacion_2019-estimacion_2020)/estimacion_2019
+
+    return estimacion_2019, estimacion_2020, variacion
