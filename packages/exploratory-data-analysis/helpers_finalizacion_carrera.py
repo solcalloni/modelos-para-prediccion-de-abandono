@@ -607,9 +607,9 @@ def plot_egresados_por_anio_cantidad_y_k(resumen: pd.DataFrame, anio: int, carre
     fig, ax = plt.subplots(figsize=(10, 5))
 
     sns.barplot(data=resumen_plot, x="anios_cursada", y="cantidad_egresados", order=orden, ax=ax)
-    ax.set_xlabel("Años de cursada", fontsize=15)
+    ax.set_xlabel("Cantidad de años cursando", fontsize=15)
     ax.set_ylabel("Cantidad de egresados", fontsize=15)
-    ax.set_title(f"Cantidad de egresados en {anio} por años de cursada. Carrera: {carrera}", fontsize=15)
+    ax.set_title(f"Cantidad ingresantes que egresaron en {anio} por años de cursada. Carrera: {carrera}", fontsize=15)
     ax.tick_params(axis="x", labelsize=13)
     ax.tick_params(axis="y", labelsize=13)
 
@@ -651,7 +651,7 @@ def plot_egresados_por_anio_cantidad_y_k(resumen: pd.DataFrame, anio: int, carre
         ax.text(
             x_centro,
             y_texto,
-            "90%",
+            "90% del egreso",
             ha="center",
             va="center",
             fontsize=12,
@@ -748,6 +748,7 @@ def plot_tiempo_cursando(
     plt.tight_layout()
     plt.show()
 
+    ## segundo grafico: sombrear el tramo que contiene k y se aproxima al 90% del total
     pivot = (
         filtrado.groupby(["tiempo_cursando", "anio_egreso"])["cantidad_egresados"]
         .sum()
@@ -761,13 +762,11 @@ def plot_tiempo_cursando(
     fig, ax = plt.subplots(figsize=(12, 6))
     pivot.plot(kind="bar", stacked=True, ax=ax, colormap="tab20")
     ax.set_xlabel("Cantidad de años cursando", fontsize=15)
-    ax.set_ylabel("Cantidad de egresados", fontsize=15)
-    ax.set_title(f"Tiempo de cursada al momento de egreso ({anio_desde}–{anio_hasta}). Carrera: {carrera}", fontsize=15)
-    ax.legend(title="Año de egreso", loc="right", fontsize=12)
+    ax.set_ylabel("Cantidad de ingresantes que egresaron", fontsize=15)
+    ax.set_title(f"Cantidad de ingresantes acumulados al momento del egreso ({anio_desde}–{anio_hasta}). Carrera: {carrera}", fontsize=15)
+    ax.legend(title="Año de egreso", loc="right", fontsize=13)
     ax.tick_params(axis="x", rotation=0, labelsize=13)
     ax.tick_params(axis="y", labelsize=13)
-
-    ## segundo grafico: sombrear el tramo que contiene k y se aproxima al 90% del total
 
     totales_por_tiempo = pivot.sum(axis=1)
     cantidades = totales_por_tiempo.tolist()
@@ -873,11 +872,7 @@ def plot_tiempo_cursando(
         total_height = pivot.loc[tc].sum()
         proporcion_simple = (total_height / grand_total) if grand_total else 0
         ax.text(i, total_height, f"{proporcion_simple:.1%}", ha="center", va="bottom", fontsize=11)
-    ax_right2 = ax.twinx()
-    ax_right2.set_ylim(ax.get_ylim()[0] / grand_total, ax.get_ylim()[1] / grand_total)
-    ax_right2.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
-    ax_right2.tick_params(axis="y", labelsize=13)
-    ax_right2.set_ylabel("% de egresados", fontsize=13)
+
     plt.tight_layout()
     plt.show()
 
