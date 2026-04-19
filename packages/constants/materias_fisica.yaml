@@ -1,0 +1,30 @@
+# Listado de materias de la Licenciatura en Física
+
+planes:
+  - anio: 1987
+    materias:
+      - "Física 1"
+      - "Física 2"
+      - "Física 3"
+      - "Física 4"
+      - "Laboratorio 1"
+      - "Laboratorio 2"
+      - "Laboratorio 3"
+      - "Laboratorio 4"
+      - "Laboratorio 5"
+      - "Laboratorio 6"
+      - "Laboratorio 7"
+      - "Mecánica Clásica"
+      - "Física Teórica 1"
+      - "Física Teórica 2"
+      - "Física Teórica 3"
+      - "Estructura de la materia 1"
+      - "Estructura de la materia 2"
+      - "Estructura de la materia 3"
+      - "Estructura de la materia 4"
+      - "Matemática 1"
+      - "Matemática 2"
+      - "Matemática 3"
+      - "Matemática 4"
+      - "Cálculo Numérico"
+      - "Tesis de Licenciatura"
